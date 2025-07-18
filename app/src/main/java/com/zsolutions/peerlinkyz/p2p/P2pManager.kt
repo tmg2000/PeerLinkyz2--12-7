@@ -28,6 +28,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import io.ktor.client.*
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.websocket.*
 
 class P2pManager(private val context: Context, private val scope: CoroutineScope) {
 
@@ -36,6 +39,7 @@ class P2pManager(private val context: Context, private val scope: CoroutineScope
     private val messageChannel = Channel<String>(Channel.UNLIMITED)
 
     private val workingTorService = WorkingTorService(context, scope)
+    private var p2pClient: P2pClient? = null
     private val _onionAddress = MutableStateFlow<String?>(null)
     val onionAddress: SharedFlow<String?> = _onionAddress.asSharedFlow()
 
@@ -56,6 +60,9 @@ class P2pManager(private val context: Context, private val scope: CoroutineScope
             workingTorService.status.collect { status ->
                 Log.d("P2pManager", "Tor status: $status")
                 _torStatus.value = status
+                if (status == "Tor Ready" && p2pClient == null) {
+                    initializeP2pClient()
+                }
             }
         }
     }
@@ -169,5 +176,21 @@ class P2pManager(private val context: Context, private val scope: CoroutineScope
     
     fun isTorReady(): Boolean {
         return workingTorService.status.value == "Tor Ready"
+    }
+    
+    fun getP2pClient(): P2pClient? = p2pClient
+    
+    private fun initializeP2pClient() {
+        val torProxy = workingTorService.getSocksProxy()
+        val httpClient = HttpClient(OkHttp) {
+            engine {
+                proxy = torProxy
+            }
+            install(WebSockets) {
+                maxFrameSize = Long.MAX_VALUE
+            }
+        }
+        p2pClient = P2pClient(scope, httpClient)
+        Log.d("P2pManager", "P2pClient initialized with Tor proxy")
     }
 }

@@ -12,13 +12,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
-class P2pClient(private val scope: CoroutineScope) {
-
-    private val client = HttpClient { 
-        install(WebSockets) {
-            maxFrameSize = Long.MAX_VALUE
-        }
-    }
+class P2pClient(
+    private val scope: CoroutineScope,
+    private val httpClient: HttpClient
+) {
     private val messageChannel = Channel<String>(Channel.UNLIMITED)
     private var session: WebSocketSession? = null
     private var connectionJob: Job? = null
@@ -40,7 +37,7 @@ class P2pClient(private val scope: CoroutineScope) {
                 isConnecting = true
                 try {
                     Log.d("P2pClient", "Attempting to connect to $address (attempt ${retryCount + 1})")
-                    client.webSocket(address) {
+                    httpClient.webSocket(address) {
                         session = this
                         isConnecting = false
                         retryCount = 0 // Reset retry count on successful connection

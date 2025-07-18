@@ -48,7 +48,7 @@ class ChatActivity : AppCompatActivity() {
     private var outboxProcessingJob: Job? = null
 
     private lateinit var p2pManager: P2pManager
-    private val client: HttpClient get() = (application as PeerLinkyzApplication).httpClient!!
+    private val p2pClient: P2pClient? get() = p2pManager.getP2pClient()
     private lateinit var cryptoManager: CryptoManager
     private lateinit var outboxRepository: com.zsolutions.peerlinkyz.db.OutboxRepository
 
@@ -102,56 +102,110 @@ class ChatActivity : AppCompatActivity() {
                     }
                 }
 
-                // Establish persistent WebSocket connection
+                // Establish persistent WebSocket connection using P2pClient
                 remotePeerAddress?.let { address ->
                     lifecycleScope.launch(Dispatchers.IO) {
-                        var connectionAttempts = 0
-                        val maxAttempts = 3
-                        
-                        while (connectionAttempts < maxAttempts) {
-                            val currentClient = (application as PeerLinkyzApplication).httpClient
-                            if (currentClient == null) {
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(this@ChatActivity, "HttpClient not initialized. Retrying...", Toast.LENGTH_SHORT).show()
-                                }
-                                delay(2000)
-                                connectionAttempts++
-                                continue
+                        val client = p2pClient
+                        if (client == null) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(this@ChatActivity, "P2pClient not initialized. Tor may not be ready.", Toast.LENGTH_SHORT).show()
                             }
-                            
-                            try {
-                                val fullAddress = if (!address.startsWith("ws://") && !address.startsWith("wss://")) {
-                                    "ws://$address"
-                                } else {
-                                    address
-                                }
-                                
-                                Log.d("ChatActivity", "Attempting to connect to: $fullAddress")
-                                webSocketSession = currentClient.webSocketSession(fullAddress)
-                                Log.d("ChatActivity", "WebSocket connection established")
+                            return@launch
+                        }
+                        
+                        val fullAddress = if (!address.startsWith("ws://") && !address.startsWith("wss://")) {
+                            "ws://$address"
+                        } else {
+                            address
+                        }
+                        
+                        Log.d("ChatActivity", "Starting P2pClient connection to: $fullAddress")
+                        client.start(fullAddress)
+                        
+                        // Determine initiator and start handshake
+                        val localPeerId = p2pManager.getPeerAddress() ?: ""
+                        val remotePeerId = friend.peerId
+                        if (localPeerId < remotePeerId) {
+                            initiateHandshake()
+                        }
+                        
+                        // Start observing incoming messages from P2pClient
+                        launch {
+                            client.observeMessages().consumeEach { messageText ->
+                                Log.d("ChatActivity", "Received message from P2pClient: $messageText")
+                                if (messageText.startsWith("FROM:")) {
+                                    val parts = messageText.split(" ", limit = 2)
+                                    if (parts.size == 2) {
+                                        val senderPeerId = parts[0].substringAfter("FROM:")
+                                            .replace("/ip4/", "")
+                                            .replace("/tcp/", ":")
+                                            .replace("/http", "")
+                                        val actualMessage = parts[1]
 
-                                // Determine initiator and start handshake
-                                val localPeerId = p2pManager.getPeerAddress() ?: ""
-                                val remotePeerId = friend.peerId
-                                if (localPeerId < remotePeerId) {
-                                    initiateHandshake()
-                                }
+                                        // Only process messages from the current friend
+                                        val senderFriend = friendDao.getFriendByPeerId(senderPeerId)
+                                        if (senderFriend?.id == friendId) {
+                                            // Handle key exchange message
+                                            if (actualMessage.startsWith("ECDH_PUBLIC_KEY:")) {
+                                                Log.d("ChatActivity", "Received ECDH_PUBLIC_KEY message.")
+                                                val remotePublicKeyEncoded = actualMessage.substringAfter("ECDH_PUBLIC_KEY:")
+                                                val publicKeyBytes = Base64.getDecoder().decode(remotePublicKeyEncoded)
+                                                val spec = X509EncodedKeySpec(publicKeyBytes)
+                                                val keyFactory = KeyFactory.getInstance("ECDH", "BC")
+                                                remoteECDHPublicKey = keyFactory.generatePublic(spec)
+                                                Log.d("ChatActivity", "Remote Public Key Decoded: ${remoteECDHPublicKey?.encoded?.let { Base64.getEncoder().encodeToString(it) }}")
 
-                                // Connection successful, break out of retry loop
-                                break
-                                
-                            } catch (e: Exception) {
-                                Log.e("ChatActivity", "Connection attempt ${connectionAttempts + 1} failed: ${e.message}")
-                                connectionAttempts++
-                                
-                                if (connectionAttempts < maxAttempts) {
-                                    val delayMs = (2000 * connectionAttempts).toLong()
-                                    Log.d("ChatActivity", "Retrying connection in ${delayMs}ms")
-                                    delay(delayMs)
-                                } else {
-                                    withContext(Dispatchers.Main) {
-                                        Toast.makeText(this@ChatActivity, "Failed to connect to peer after $maxAttempts attempts: ${e.message}", Toast.LENGTH_LONG).show()
+                                                // If we are not the initiator, send our public key back
+                                                val localPeerId = p2pManager.getPeerAddress() ?: ""
+                                                val remotePeerId = friend.peerId
+                                                if (localPeerId > remotePeerId) {
+                                                    initiateHandshake() // Send our public key
+                                                }
+
+                                                localECDHPrivateKey?.let { privateKey ->
+                                                    remoteECDHPublicKey?.let { publicKey ->
+                                                        Log.d("ChatActivity", "Deriving shared secret...")
+                                                        sharedSecret = cryptoManager.deriveSharedSecret(privateKey, publicKey)
+                                                        isKeyExchangeComplete = true
+                                                        Log.d("ChatActivity", "Shared Secret Derived. Key exchange complete: $isKeyExchangeComplete")
+                                                        withContext(Dispatchers.Main) {
+                                                            Toast.makeText(this@ChatActivity, "Key exchange complete!", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    } ?: Log.e("ChatActivity", "Remote public key is null after decoding.")
+                                                } ?: Log.e("ChatActivity", "Local private key is null.")
+                                            } else if (isKeyExchangeComplete && sharedSecret != null) {
+                                                Log.d("ChatActivity", "Key exchange complete. Attempting to decrypt message.")
+                                                // Decrypt message using shared secret
+                                                try {
+                                                    val decryptedMessageBytes = cryptoManager.decrypt(Base64.getDecoder().decode(actualMessage), sharedSecret!!)
+                                                    val decryptedMessage = String(decryptedMessageBytes, StandardCharsets.UTF_8)
+                                                    val receivedMessage = Message(friendId = friendId, data = decryptedMessage.toByteArray(StandardCharsets.UTF_8), isSent = false)
+                                                    messageDao.insertMessage(receivedMessage)
+                                                    withContext(Dispatchers.Main) {
+                                                        messages.add(receivedMessage)
+                                                        messageAdapter.notifyItemInserted(messages.size - 1)
+                                                        chatRecyclerView.scrollToPosition(messages.size - 1)
+                                                    }
+                                                } catch (e: Exception) {
+                                                    Log.e("ChatActivity", "Decryption failed: ${e.message}")
+                                                    withContext(Dispatchers.Main) {
+                                                        Toast.makeText(this@ChatActivity, "Failed to decrypt message.", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            } else {
+                                                Log.d("ChatActivity", "Key exchange not complete. Message not processed. isKeyExchangeComplete: $isKeyExchangeComplete, sharedSecret: ${sharedSecret != null}")
+                                                withContext(Dispatchers.Main) {
+                                                    Toast.makeText(this@ChatActivity, "Key exchange not complete. Message not processed.", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        } else {
+                                            Log.d("ChatActivity", "Message from unknown sender or not current friend. SenderPeerId: $senderPeerId, FriendId: $friendId")
+                                        }
+                                    } else {
+                                        Log.d("ChatActivity", "Received message parts size is not 2. Message: $messageText")
                                     }
+                                } else {
+                                    Log.d("ChatActivity", "Received message does not start with 'FROM:'. Message: $messageText")
                                 }
                             }
                         }
@@ -317,56 +371,43 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private suspend fun sendPublicKey(publicKeyEncoded: String) {
-        webSocketSession?.send(Frame.Text("ECDH_PUBLIC_KEY:" + publicKeyEncoded))
+        p2pClient?.sendMessage("ECDH_PUBLIC_KEY:$publicKeyEncoded")
     }
 
     private suspend fun sendOutboxMessage(outboxMessage: com.zsolutions.peerlinkyz.db.OutboxMessage) {
         withContext(Dispatchers.IO) {
             try {
-                // Ensure WebSocket session is active before sending
-                if (webSocketSession == null || webSocketSession?.isActive == false) {
-                    Log.d("ChatActivity", "WebSocket session not active, attempting to reconnect...")
+                val client = p2pClient
+                if (client == null) {
+                    Log.e("ChatActivity", "P2pClient not initialized")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ChatActivity, "P2pClient not initialized. Message will be retried.", Toast.LENGTH_SHORT).show()
+                    }
+                    return@withContext
+                }
+                
+                if (!client.isConnected()) {
+                    Log.d("ChatActivity", "P2pClient not connected, attempting to reconnect...")
                     remotePeerAddress?.let { address ->
                         val fullAddress = if (!address.startsWith("ws://") && !address.startsWith("wss://")) {
                             "ws://$address"
                         } else {
                             address
                         }
-                        val currentClient = (application as PeerLinkyzApplication).httpClient
-                        if (currentClient == null) {
-                            Log.e("ChatActivity", "HttpClient not initialized")
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(this@ChatActivity, "HttpClient not initialized. Message will be retried.", Toast.LENGTH_SHORT).show()
-                            }
-                            return@withContext
-                        }
-                        
-                        try {
-                            webSocketSession = currentClient.webSocketSession(fullAddress)
-                            Log.d("ChatActivity", "WebSocket session reconnected for message sending")
-                        } catch (e: Exception) {
-                            Log.e("ChatActivity", "Failed to reconnect WebSocket session: ${e.message}")
-                            return@withContext
-                        }
+                        client.start(fullAddress)
+                        delay(2000)
                     }
                 }
 
-                webSocketSession?.let { session ->
-                    if (session.isActive) {
-                        val messageString = String(outboxMessage.message, Charsets.ISO_8859_1)
-                        session.send(Frame.Text("FROM:${outboxMessage.peerId} $messageString"))
-                        outboxRepository.markAsSent(outboxMessage.id)
-                        Log.d("ChatActivity", "Message sent successfully: ${outboxMessage.id}")
-                    } else {
-                        Log.w("ChatActivity", "WebSocket session is not active")
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(this@ChatActivity, "Connection lost. Message will be retried.", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                } ?: run {
-                    Log.w("ChatActivity", "WebSocket session is null")
+                if (client.isConnected()) {
+                    val messageString = String(outboxMessage.message, Charsets.ISO_8859_1)
+                    client.sendMessage("FROM:${outboxMessage.peerId} $messageString")
+                    outboxRepository.markAsSent(outboxMessage.id)
+                    Log.d("ChatActivity", "Message sent successfully: ${outboxMessage.id}")
+                } else {
+                    Log.w("ChatActivity", "P2pClient is not connected")
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ChatActivity, "Not connected to peer. Message will be retried.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@ChatActivity, "Connection lost. Message will be retried.", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
