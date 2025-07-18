@@ -1,0 +1,5 @@
+# GeoIP Database for Tor
+# This is a minimal GeoIP file for basic functionality
+# Format: startIP endIP countryCode
+0.0.0.0 127.255.255.255 ??
+128.0.0.0 255.255.255.255 ??

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory 
+        android:title="Appearance"
+        android:icon="@drawable/ic_settings"
+        app:iconSpaceReserved="false">
+        
+        <ListPreference
+            android:defaultValue="system"
+            android:entries="@array/theme_entries"
+            android:entryValues="@array/theme_values"
+            android:key="theme_preference"
+            android:title="Theme"
+            android:summary="Choose your preferred app theme"
+            android:icon="@drawable/ic_settings"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory 
+        android:title="QR Code &amp; Friends"
+        android:icon="@drawable/ic_scan_qr"
+        app:iconSpaceReserved="false">
+        
+        <EditTextPreference
+            android:key="username_preference"
+            android:title="Username"
+            android:summary="Set your display name for QR codes"
+            android:icon="@drawable/ic_add_friend"
+            app:iconSpaceReserved="false" />
+            
+        <Preference
+            android:key="generate_qr_code"
+            android:title="My QR Code"
+            android:summary="Generate and share your QR code"
+            android:icon="@drawable/ic_scan_qr"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="add_friend_qr_scan"
+            android:title="Scan Friend's QR Code"
+            android:summary="Add a new friend by scanning their QR code"
+            android:icon="@drawable/ic_scan_qr"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="scan_qr_from_gallery"
+            android:title="Scan QR from Gallery"
+            android:summary="Import a QR code from your photo gallery"
+            android:icon="@drawable/ic_action_attach"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory 
+        android:title="Privacy &amp; Data"
+        android:icon="@drawable/ic_settings"
+        app:iconSpaceReserved="false">
+        
+        <SeekBarPreference
+            android:key="message_retention_days"
+            android:title="Message Retention"
+            android:summary="Keep chat history for %1$s days"
+            android:defaultValue="30"
+            android:max="365"
+            android:min="1"
+            android:icon="@drawable/ic_settings"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            android:key="background_sync_enabled"
+            android:title="Background Message Sync"
+            android:summary="Enable periodic checking for new messages when the app is closed"
+            android:defaultValue="true"
+            android:icon="@drawable/ic_settings"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

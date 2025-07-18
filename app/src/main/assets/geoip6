@@ -1,0 +1,4 @@
+# GeoIP6 Database for Tor
+# This is a minimal GeoIP6 file for basic functionality
+# Format: startIP endIP countryCode
+::0 ::ffff:ffff:ffff:ffff ??
