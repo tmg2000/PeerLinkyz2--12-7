@@ -14,6 +14,7 @@ import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.zsolutions.peerlinkyz.p2p.P2pManager
+import com.zsolutions.peerlinkyz.p2p.P2pClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -111,6 +112,20 @@ class ChatActivity : AppCompatActivity() {
                 // Establish persistent WebSocket connection using P2pClient
                 remotePeerAddress?.let { address ->
                     lifecycleScope.launch(Dispatchers.IO) {
+                        // Wait for Tor to be ready before attempting connection
+                        if (!p2pManager.isTorReady()) {
+                            Log.d("ChatActivity", "Waiting for Tor to be ready...")
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(this@ChatActivity, "Waiting for Tor to be ready...", Toast.LENGTH_SHORT).show()
+                            }
+                            // Wait and retry
+                            delay(2000)
+                            if (!p2pManager.isTorReady()) {
+                                Log.w("ChatActivity", "Tor still not ready after waiting")
+                                return@launch
+                            }
+                        }
+                        
                         val client = p2pClient
                         if (client == null) {
                             withContext(Dispatchers.Main) {
@@ -126,12 +141,21 @@ class ChatActivity : AppCompatActivity() {
                         }
                         
                         Log.d("ChatActivity", "Starting P2pClient connection to: $fullAddress")
+                        Log.d("ChatActivity", "Tor status: ${p2pManager.getTorStatus()}, Bootstrap: ${p2pManager.getTorBootstrapProgress()}%")
+                        Log.d("ChatActivity", "Local peer address: ${p2pManager.getPeerAddress()}")
+                        
                         client.start(fullAddress)
                         
                         // Determine initiator and start handshake
-                        val localPeerId = p2pManager.getPeerAddress() ?: ""
+                        val localPeerId = p2pManager.getPeerAddress()
                         val remotePeerId = friend.peerId
-                        if (localPeerId < remotePeerId) {
+                        
+                        if (localPeerId == null || localPeerId.isEmpty()) {
+                            Log.w("ChatActivity", "Local peer address not available yet (Tor may not be ready)")
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(this@ChatActivity, "Waiting for Tor to be ready...", Toast.LENGTH_SHORT).show()
+                            }
+                        } else if (localPeerId < remotePeerId) {
                             initiateHandshake()
                         }
                         
@@ -162,10 +186,13 @@ class ChatActivity : AppCompatActivity() {
                                                 Log.d("ChatActivity", "Remote Public Key Decoded: ${remoteECDHPublicKey?.encoded?.let { Base64.getEncoder().encodeToString(it) }}")
 
                                                 // If we are not the initiator, send our public key back
-                                                val localPeerId = p2pManager.getPeerAddress() ?: ""
+                                                val localPeerId = p2pManager.getPeerAddress()
                                                 val remotePeerId = friend.peerId
-                                                if (localPeerId > remotePeerId) {
+                                                
+                                                if (localPeerId != null && localPeerId.isNotEmpty() && localPeerId > remotePeerId) {
                                                     initiateHandshake() // Send our public key
+                                                } else if (localPeerId == null || localPeerId.isEmpty()) {
+                                                    Log.w("ChatActivity", "Cannot respond to key exchange: local peer address not available")
                                                 }
 
                                                 localECDHPrivateKey?.let { privateKey ->
@@ -234,9 +261,16 @@ class ChatActivity : AppCompatActivity() {
                             val friend = friendDao.getFriendById(friendId)
                             if (friend != null) {
                                 val encryptedMessage = cryptoManager.encrypt(messageText.toByteArray(StandardCharsets.UTF_8), sharedSecret!!)
-                                val localPeerId = p2pManager.getPeerAddress() ?: return@launch
+                                val localPeerId = p2pManager.getPeerAddress()
+                                if (localPeerId == null) {
+                                    Log.e("ChatActivity", "Cannot send message: localPeerId is null (Tor may not be ready)")
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(this@ChatActivity, "Cannot send message: Tor not ready", Toast.LENGTH_SHORT).show()
+                                    }
+                                    return@launch
+                                }
                                 val outboxMessage = com.zsolutions.peerlinkyz.db.OutboxMessage(
-                                    peerId = localPeerId!!,
+                                    peerId = localPeerId,
                                     recipientAddress = friend.peerId,
                                     message = encryptedMessage,
                                     sent = false
