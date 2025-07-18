@@ -1,0 +1,70 @@
+{
+  "summary": {
+    "total_tests": 12,
+    "passed": 12,
+    "failed": 0,
+    "success_rate": 100.0
+  },
+  "detailed_results": [
+    {
+      "test": "Onion Address Generation",
+      "passed": true,
+      "details": "Generated: xvfxa950gjty9ar5e8j339ehxdlfugdhzxhuluaq.onion (Length: 46)"
+    },
+    {
+      "test": "Onion Address Files Creation",
+      "passed": true,
+      "details": "Created files in /tmp/test_hidden_service_4ifj2pq5"
+    },
+    {
+      "test": "Onion Address Persistence",
+      "passed": true,
+      "details": "Original: lgid05dbiefoalxzjo3vf8mshqkzi3soqeqcb2fss.onion, Restored: lgid05dbiefoalxzjo3vf8mshqkzi3soqeqcb2fss.onion"
+    },
+    {
+      "test": "Key Exchange State Saving",
+      "passed": true,
+      "details": "Saved state for friend: test_friend_123"
+    },
+    {
+      "test": "Key Exchange State Restoration",
+      "passed": true,
+      "details": "Key exchange complete: True"
+    },
+    {
+      "test": "Key Exchange Error Resolution",
+      "passed": true,
+      "details": "Should show error: False"
+    },
+    {
+      "test": "Multiple Friends Key Exchange",
+      "passed": true,
+      "details": "Friends: 3, Unique secrets: 3"
+    },
+    {
+      "test": "Tor Proxy Configuration",
+      "passed": true,
+      "details": "SOCKS: 127.0.0.1:9050, Control: 127.0.0.1:9051"
+    },
+    {
+      "test": "Fallback Connection Removal",
+      "passed": true,
+      "details": "No fallback HttpClient configured"
+    },
+    {
+      "test": "Device Onion Address Generation",
+      "passed": true,
+      "details": "Device A: mlyevc5o6h6dgyrh6o6o..., Device B: cnh7516qbrvqfwyo3hau..."
+    },
+    {
+      "test": "Two-Device Communication Setup",
+      "passed": true,
+      "details": "Device A ready: True, Device B ready: True"
+    },
+    {
+      "test": "Shared Secret Consistency",
+      "passed": true,
+      "details": "Secrets match: True"
+    }
+  ]
+}
