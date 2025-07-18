@@ -9,17 +9,17 @@
     {
       "test": "Onion Address Generation",
       "passed": true,
-      "details": "Generated: xvfxa950gjty9ar5e8j339ehxdlfugdhzxhuluaq.onion (Length: 46)"
+      "details": "Generated: ysh1z5tx85fidwavu5ddwbkssremhedvvegsbcp78.onion (Length: 47)"
     },
     {
       "test": "Onion Address Files Creation",
       "passed": true,
-      "details": "Created files in /tmp/test_hidden_service_4ifj2pq5"
+      "details": "Created files in /tmp/test_hidden_service_3j_vanyr"
     },
     {
       "test": "Onion Address Persistence",
       "passed": true,
-      "details": "Original: lgid05dbiefoalxzjo3vf8mshqkzi3soqeqcb2fss.onion, Restored: lgid05dbiefoalxzjo3vf8mshqkzi3soqeqcb2fss.onion"
+      "details": "Original: 6cfunk7qpju4efypsna7vhkgnx8o4mqpesfuuaw63su.onion, Restored: 6cfunk7qpju4efypsna7vhkgnx8o4mqpesfuuaw63su.onion"
     },
     {
       "test": "Key Exchange State Saving",
@@ -54,7 +54,7 @@
     {
       "test": "Device Onion Address Generation",
       "passed": true,
-      "details": "Device A: mlyevc5o6h6dgyrh6o6o..., Device B: cnh7516qbrvqfwyo3hau..."
+      "details": "Device A: ntx5c8jruct9hkcjct4c..., Device B: wp6zl2i3mbuyzbemhe4k..."
     },
     {
       "test": "Two-Device Communication Setup",
