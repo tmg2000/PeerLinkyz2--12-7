@@ -50,13 +50,7 @@ class PeerLinkyzApplication : MultiDexApplication() {
                             android.util.Log.d("PeerLinkyzApplication", "HttpClient initialized with Tor proxy")
                         } catch (e: Exception) {
                             android.util.Log.e("PeerLinkyzApplication", "Failed to initialize HttpClient with Tor proxy: ${e.message}")
-                            // Fallback to direct connection if Tor is not available
-                            httpClient = HttpClient(OkHttp) {
-                                install(WebSockets) {
-                                    maxFrameSize = Long.MAX_VALUE
-                                }
-                            }
-                            android.util.Log.d("PeerLinkyzApplication", "HttpClient initialized without Tor proxy as fallback")
+                            android.util.Log.e("PeerLinkyzApplication", "Tor is required for all connections. HttpClient will remain null until Tor is ready.")
                         }
                     }
                 }
