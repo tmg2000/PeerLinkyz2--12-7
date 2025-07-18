@@ -1,6 +1,8 @@
 package com.zsolutions.peerlinkyz
 
+import android.content.SharedPreferences
 import android.os.Bundle
+import android.util.Log
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
@@ -8,6 +10,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
+import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.zsolutions.peerlinkyz.p2p.P2pManager
@@ -25,11 +28,11 @@ import kotlinx.coroutines.isActive
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.security.KeyFactory
+import java.security.spec.PKCS8EncodedKeySpec
 import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
-import android.util.Log
 
 class ChatActivity : AppCompatActivity() {
 
@@ -65,6 +68,9 @@ class ChatActivity : AppCompatActivity() {
             finish()
             return
         }
+        
+        // Restore key exchange state if available
+        restoreKeyExchangeState()
 
         lifecycleScope.launch {
             messageDao = AppDatabase.getDatabase(applicationContext).messageDao()
@@ -167,6 +173,7 @@ class ChatActivity : AppCompatActivity() {
                                                         Log.d("ChatActivity", "Deriving shared secret...")
                                                         sharedSecret = cryptoManager.deriveSharedSecret(privateKey, publicKey)
                                                         isKeyExchangeComplete = true
+                                                        saveKeyExchangeState()
                                                         Log.d("ChatActivity", "Shared Secret Derived. Key exchange complete: $isKeyExchangeComplete")
                                                         withContext(Dispatchers.Main) {
                                                             Toast.makeText(this@ChatActivity, "Key exchange complete!", Toast.LENGTH_SHORT).show()
@@ -210,86 +217,6 @@ class ChatActivity : AppCompatActivity() {
                             }
                         }
                         
-                        // Start observing incoming messages from the P2pManager's server
-                        launch {
-                            p2pManager.observeMessages().consumeEach { messageText ->
-                                Log.d("ChatActivity", "Received message from P2pManager: $messageText")
-                                if (messageText.startsWith("FROM:")) {
-                                    val parts = messageText.split(" ", limit = 2)
-                                    if (parts.size == 2) {
-                                        val senderPeerId = parts[0].substringAfter("FROM:")
-                                            .replace("/ip4/", "")
-                                            .replace("/tcp/", ":")
-                                            .replace("/http", "")
-                                        val actualMessage = parts[1]
-
-                                        // Only process messages from the current friend
-                                        val senderFriend = friendDao.getFriendByPeerId(senderPeerId)
-                                        if (senderFriend?.id == friendId) {
-                                            // Handle key exchange message
-                                            if (actualMessage.startsWith("ECDH_PUBLIC_KEY:")) {
-                                                Log.d("ChatActivity", "Received ECDH_PUBLIC_KEY message.")
-                                                val remotePublicKeyEncoded = actualMessage.substringAfter("ECDH_PUBLIC_KEY:")
-                                                val publicKeyBytes = Base64.getDecoder().decode(remotePublicKeyEncoded)
-                                                val spec = X509EncodedKeySpec(publicKeyBytes)
-                                                val keyFactory = KeyFactory.getInstance("ECDH", "BC")
-                                                remoteECDHPublicKey = keyFactory.generatePublic(spec)
-                                                Log.d("ChatActivity", "Remote Public Key Decoded: ${remoteECDHPublicKey?.encoded?.let { Base64.getEncoder().encodeToString(it) }}")
-
-                                                // If we are not the initiator, send our public key back
-                                                val localPeerId = p2pManager.getPeerAddress() ?: ""
-                                                val remotePeerId = friend.peerId
-                                                if (localPeerId > remotePeerId) {
-                                                    initiateHandshake() // Send our public key
-                                                }
-
-                                                localECDHPrivateKey?.let { privateKey ->
-                                                    remoteECDHPublicKey?.let { publicKey ->
-                                                        Log.d("ChatActivity", "Deriving shared secret...")
-                                                        sharedSecret = cryptoManager.deriveSharedSecret(privateKey, publicKey)
-                                                        isKeyExchangeComplete = true
-                                                        Log.d("ChatActivity", "Shared Secret Derived. Key exchange complete: $isKeyExchangeComplete")
-                                                        withContext(Dispatchers.Main) {
-                                                            Toast.makeText(this@ChatActivity, "Key exchange complete!", Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    } ?: Log.e("ChatActivity", "Remote public key is null after decoding.")
-                                                } ?: Log.e("ChatActivity", "Local private key is null.")
-                                            } else if (isKeyExchangeComplete && sharedSecret != null) {
-                                                Log.d("ChatActivity", "Key exchange complete. Attempting to decrypt message.")
-                                                // Decrypt message using shared secret
-                                                try {
-                                                    val decryptedMessageBytes = cryptoManager.decrypt(Base64.getDecoder().decode(actualMessage), sharedSecret!!)
-                                                    val decryptedMessage = String(decryptedMessageBytes, StandardCharsets.UTF_8)
-                                                    val receivedMessage = Message(friendId = friendId, data = decryptedMessage.toByteArray(StandardCharsets.UTF_8), isSent = false)
-                                                    messageDao.insertMessage(receivedMessage)
-                                                    withContext(Dispatchers.Main) {
-                                                        messages.add(receivedMessage)
-                                                        messageAdapter.notifyItemInserted(messages.size - 1)
-                                                        chatRecyclerView.scrollToPosition(messages.size - 1)
-                                                    }
-                                                } catch (e: Exception) {
-                                                    Log.e("ChatActivity", "Decryption failed: ${e.message}")
-                                                    withContext(Dispatchers.Main) {
-                                                        Toast.makeText(this@ChatActivity, "Failed to decrypt message.", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                            } else {
-                                                Log.d("ChatActivity", "Key exchange not complete. Message not processed. isKeyExchangeComplete: $isKeyExchangeComplete, sharedSecret: ${sharedSecret != null}")
-                                                withContext(Dispatchers.Main) {
-                                                    Toast.makeText(this@ChatActivity, "Key exchange not complete. Message not processed.", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                        } else {
-                                            Log.d("ChatActivity", "Message from unknown sender or not current friend. SenderPeerId: $senderPeerId, FriendId: $friendId")
-                                        }
-                                    } else {
-                                        Log.d("ChatActivity", "Received message parts size is not 2. Message: $messageText")
-                                    }
-                                } else {
-                                    Log.d("ChatActivity", "Received message does not start with 'FROM:'. Message: $messageText")
-                                }
-                            }
-                        }
                         
                         // Process any unsent messages from the outbox when connection is established
                         processOutbox()
@@ -426,5 +353,66 @@ class ChatActivity : AppCompatActivity() {
                 sendOutboxMessage(message)
             }
         }
+    }
+    
+    private fun saveKeyExchangeState() {
+        if (isKeyExchangeComplete && sharedSecret != null && localECDHPrivateKey != null && remoteECDHPublicKey != null) {
+            val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+            val editor = sharedPreferences.edit()
+            editor.putString("shared_secret_$friendId", Base64.getEncoder().encodeToString(sharedSecret!!))
+            editor.putString("local_private_key_$friendId", Base64.getEncoder().encodeToString(localECDHPrivateKey!!.encoded))
+            editor.putString("remote_public_key_$friendId", Base64.getEncoder().encodeToString(remoteECDHPublicKey!!.encoded))
+            editor.putBoolean("key_exchange_complete_$friendId", true)
+            editor.apply()
+            Log.d("ChatActivity", "Key exchange state saved for friend $friendId")
+        }
+    }
+    
+    private fun restoreKeyExchangeState() {
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+        val isComplete = sharedPreferences.getBoolean("key_exchange_complete_$friendId", false)
+        
+        if (isComplete) {
+            try {
+                val sharedSecretEncoded = sharedPreferences.getString("shared_secret_$friendId", null)
+                val localPrivateKeyEncoded = sharedPreferences.getString("local_private_key_$friendId", null)
+                val remotePublicKeyEncoded = sharedPreferences.getString("remote_public_key_$friendId", null)
+                
+                if (sharedSecretEncoded != null && localPrivateKeyEncoded != null && remotePublicKeyEncoded != null) {
+                    sharedSecret = Base64.getDecoder().decode(sharedSecretEncoded)
+                    
+                    val privateKeyBytes = Base64.getDecoder().decode(localPrivateKeyEncoded)
+                    val privateKeySpec = PKCS8EncodedKeySpec(privateKeyBytes)
+                    val keyFactory = KeyFactory.getInstance("ECDH", "BC")
+                    localECDHPrivateKey = keyFactory.generatePrivate(privateKeySpec)
+                    
+                    val publicKeyBytes = Base64.getDecoder().decode(remotePublicKeyEncoded)
+                    val publicKeySpec = X509EncodedKeySpec(publicKeyBytes)
+                    remoteECDHPublicKey = keyFactory.generatePublic(publicKeySpec)
+                    
+                    isKeyExchangeComplete = true
+                    Log.d("ChatActivity", "Key exchange state restored for friend $friendId")
+                }
+            } catch (e: Exception) {
+                Log.e("ChatActivity", "Failed to restore key exchange state: ${e.message}")
+                // Clear corrupted state
+                clearKeyExchangeState()
+            }
+        }
+    }
+    
+    private fun clearKeyExchangeState() {
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+        val editor = sharedPreferences.edit()
+        editor.remove("shared_secret_$friendId")
+        editor.remove("local_private_key_$friendId")
+        editor.remove("remote_public_key_$friendId")
+        editor.remove("key_exchange_complete_$friendId")
+        editor.apply()
+        
+        isKeyExchangeComplete = false
+        sharedSecret = null
+        localECDHPrivateKey = null
+        remoteECDHPublicKey = null
     }
 }

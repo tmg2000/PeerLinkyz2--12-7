@@ -30,7 +30,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.websocket.*
+import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 
 class P2pManager(private val context: Context, private val scope: CoroutineScope) {
 
@@ -186,9 +186,7 @@ class P2pManager(private val context: Context, private val scope: CoroutineScope
             engine {
                 proxy = torProxy
             }
-            install(WebSockets) {
-                maxFrameSize = Long.MAX_VALUE
-            }
+            install(ClientWebSockets)
         }
         p2pClient = P2pClient(scope, httpClient)
         Log.d("P2pManager", "P2pClient initialized with Tor proxy")
