@@ -53,8 +53,13 @@ class P2pClient(
                         } catch (e: Exception) {
                             Log.e("P2pClient", "Error receiving message: ${e.message}")
                         } finally {
-                            session = null
-                            Log.d("P2pClient", "WebSocket session closed")
+                            // Only set session to null if we should not reconnect
+                            if (!shouldReconnect) {
+                                session = null
+                                Log.d("P2pClient", "WebSocket session closed - reconnection disabled")
+                            } else {
+                                Log.d("P2pClient", "WebSocket session ended but will reconnect")
+                            }
                         }
                     }
                 } catch (e: Exception) {
