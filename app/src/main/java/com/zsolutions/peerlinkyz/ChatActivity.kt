@@ -207,12 +207,18 @@ class ChatActivity : AppCompatActivity() {
                                                         }
                                                     } ?: Log.e("ChatActivity", "Remote public key is null after decoding.")
                                                 } ?: Log.e("ChatActivity", "Local private key is null.")
-                                            } else if (isKeyExchangeComplete && sharedSecret != null) {
-                                                Log.d("ChatActivity", "Key exchange complete. Attempting to decrypt message.")
-                                                // Decrypt message using shared secret
+                                            } else {
+                                                // Commented out for testing - process plain text messages
+                                                // } else if (isKeyExchangeComplete && sharedSecret != null) {
+                                                //     Log.d("ChatActivity", "Key exchange complete. Attempting to decrypt message.")
+                                                //     // Decrypt message using shared secret
+                                                //     try {
+                                                //         val decryptedMessageBytes = cryptoManager.decrypt(Base64.getDecoder().decode(actualMessage), sharedSecret!!)
+                                                //         val decryptedMessage = String(decryptedMessageBytes, StandardCharsets.UTF_8)
+                                                Log.d("ChatActivity", "Processing plain text message for testing.")
                                                 try {
-                                                    val decryptedMessageBytes = cryptoManager.decrypt(Base64.getDecoder().decode(actualMessage), sharedSecret!!)
-                                                    val decryptedMessage = String(decryptedMessageBytes, StandardCharsets.UTF_8)
+                                                    // Process as plain text for testing
+                                                    val decryptedMessage = actualMessage
                                                     val receivedMessage = Message(friendId = friendId, data = decryptedMessage.toByteArray(StandardCharsets.UTF_8), isSent = false)
                                                     messageDao.insertMessage(receivedMessage)
                                                     withContext(Dispatchers.Main) {
@@ -221,16 +227,16 @@ class ChatActivity : AppCompatActivity() {
                                                         chatRecyclerView.scrollToPosition(messages.size - 1)
                                                     }
                                                 } catch (e: Exception) {
-                                                    Log.e("ChatActivity", "Decryption failed: ${e.message}")
+                                                    Log.e("ChatActivity", "Message processing failed: ${e.message}")
                                                     withContext(Dispatchers.Main) {
-                                                        Toast.makeText(this@ChatActivity, "Failed to decrypt message.", Toast.LENGTH_SHORT).show()
+                                                        Toast.makeText(this@ChatActivity, "Failed to process message.", Toast.LENGTH_SHORT).show()
                                                     }
                                                 }
-                                            } else {
-                                                Log.d("ChatActivity", "Key exchange not complete. Message not processed. isKeyExchangeComplete: $isKeyExchangeComplete, sharedSecret: ${sharedSecret != null}")
-                                                withContext(Dispatchers.Main) {
-                                                    Toast.makeText(this@ChatActivity, "Key exchange not complete. Message not processed.", Toast.LENGTH_SHORT).show()
-                                                }
+                                                // } else {
+                                                //     Log.d("ChatActivity", "Key exchange not complete. Message not processed. isKeyExchangeComplete: $isKeyExchangeComplete, sharedSecret: ${sharedSecret != null}")
+                                                //     withContext(Dispatchers.Main) {
+                                                //         Toast.makeText(this@ChatActivity, "Key exchange not complete. Message not processed.", Toast.LENGTH_SHORT).show()
+                                                //     }
                                             }
                                         } else {
                                             Log.d("ChatActivity", "Message from unknown sender or not current friend. SenderPeerId: $senderPeerId, FriendId: $friendId")
@@ -253,14 +259,17 @@ class ChatActivity : AppCompatActivity() {
                 sendButton.setOnClickListener {
                     val messageText = messageEditText.text.toString().trim()
                     if (messageText.isNotEmpty()) {
-                        if (!isKeyExchangeComplete || sharedSecret == null) {
-                            Toast.makeText(this@ChatActivity, "Key exchange not complete. Cannot send message.", Toast.LENGTH_SHORT).show()
-                            return@setOnClickListener
-                        }
+                        // Commented out for testing - skip key exchange requirement
+                        // if (!isKeyExchangeComplete || sharedSecret == null) {
+                        //     Toast.makeText(this@ChatActivity, "Key exchange not complete. Cannot send message.", Toast.LENGTH_SHORT).show()
+                        //     return@setOnClickListener
+                        // }
                         lifecycleScope.launch(Dispatchers.IO) {
                             val friend = friendDao.getFriendById(friendId)
                             if (friend != null) {
-                                val encryptedMessage = cryptoManager.encrypt(messageText.toByteArray(StandardCharsets.UTF_8), sharedSecret!!)
+                                // Commented out for testing - send plain text
+                                // val encryptedMessage = cryptoManager.encrypt(messageText.toByteArray(StandardCharsets.UTF_8), sharedSecret!!)
+                                val encryptedMessage = messageText.toByteArray(StandardCharsets.UTF_8)
                                 val localPeerId = p2pManager.getPeerAddress()
                                 if (localPeerId == null) {
                                     Log.e("ChatActivity", "Cannot send message: localPeerId is null (Tor may not be ready)")
