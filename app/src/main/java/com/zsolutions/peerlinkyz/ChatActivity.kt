@@ -444,18 +444,8 @@ class ChatActivity : AppCompatActivity() {
                     return@withContext
                 }
                 
-                if (!client.isConnected()) {
-                    Log.d("ChatActivity", "P2pClient not connected, attempting to reconnect...")
-                    remotePeerAddress?.let { address ->
-                        val fullAddress = if (!address.startsWith("ws://") && !address.startsWith("wss://")) {
-                            "ws://$address"
-                        } else {
-                            address
-                        }
-                        client.start(fullAddress)
-                        delay(2000)
-                    }
-                }
+                // P2pClient now handles persistent connections automatically
+                // No need for manual reconnection attempts
 
                 if (client.isConnected()) {
                     val messageString = String(outboxMessage.message, Charsets.ISO_8859_1)

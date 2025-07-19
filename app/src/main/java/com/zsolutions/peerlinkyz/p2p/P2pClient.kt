@@ -31,9 +31,8 @@ class P2pClient(
         shouldReconnect = true
         connectionJob = scope.launch(Dispatchers.IO) {
             var retryCount = 0
-            val maxRetries = 5
             
-            while (shouldReconnect && retryCount < maxRetries && isActive) {
+            while (shouldReconnect && isActive) {
                 isConnecting = true
                 try {
                     Log.d("P2pClient", "Attempting to connect to $address (attempt ${retryCount + 1})")
@@ -64,17 +63,16 @@ class P2pClient(
                     isConnecting = false
                     retryCount++
                     
-                    if (retryCount < maxRetries && shouldReconnect) {
-                        val delayMs = (1000 * retryCount).toLong() // Exponential backoff
+                    if (shouldReconnect) {
+                        val delayMs = minOf(30000, (1000 * retryCount).toLong()) // Cap at 30 seconds
                         Log.d("P2pClient", "Retrying connection in ${delayMs}ms")
                         delay(delayMs)
                     }
                 }
             }
             
-            if (retryCount >= maxRetries) {
-                Log.e("P2pClient", "Max retry attempts reached for $address")
-            }
+            // Infinite retry with exponential backoff - only stop if shouldReconnect is false
+            Log.d("P2pClient", "Connection loop ended for $address")
             isConnecting = false
         }
     }
