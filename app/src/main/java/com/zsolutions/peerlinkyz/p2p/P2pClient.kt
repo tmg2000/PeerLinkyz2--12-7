@@ -64,7 +64,13 @@ class P2pClient(
                     }
                 } catch (e: Exception) {
                     Log.e("P2pClient", "Connection failed (attempt ${retryCount + 1}): ${e.message}")
-                    session = null
+                    // Only set session to null if we should not reconnect
+                    if (!shouldReconnect) {
+                        session = null
+                        Log.d("P2pClient", "Connection failed - reconnection disabled, session nullified")
+                    } else {
+                        Log.d("P2pClient", "Connection failed but will reconnect, preserving session reference")
+                    }
                     isConnecting = false
                     retryCount++
                     
