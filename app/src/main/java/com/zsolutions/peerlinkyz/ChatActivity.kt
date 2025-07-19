@@ -92,29 +92,14 @@ class ChatActivity : AppCompatActivity() {
 
             lifecycleScope.launch {
                 try {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ChatActivity, "DEBUG: Starting database init", Toast.LENGTH_SHORT).show()
-                    }
                     
                     messageDao = AppDatabase.getDatabase(applicationContext).messageDao()
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ChatActivity, "DEBUG: MessageDao initialized", Toast.LENGTH_SHORT).show()
-                    }
                     
                     friendDao = AppDatabase.getDatabase(applicationContext).friendDao()
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ChatActivity, "DEBUG: FriendDao initialized", Toast.LENGTH_SHORT).show()
-                    }
                     
                     outboxRepository = com.zsolutions.peerlinkyz.db.OutboxRepository(com.zsolutions.peerlinkyz.db.AppDatabase.getDatabase(applicationContext).outboxDao())
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ChatActivity, "DEBUG: OutboxRepository initialized", Toast.LENGTH_SHORT).show()
-                    }
                     
                     val friend = friendDao.getFriendById(friendId)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@ChatActivity, "DEBUG: Friend lookup completed", Toast.LENGTH_SHORT).show()
-                    }
                     
                     if (friend != null) {
                         Log.d("ChatActivity", "Friend found: ${friend.username}, onionAddress: ${friend.onionAddress}")
@@ -123,32 +108,25 @@ class ChatActivity : AppCompatActivity() {
 
                         withContext(Dispatchers.Main) {
                             try {
-                                Toast.makeText(this@ChatActivity, "DEBUG: Starting UI setup", Toast.LENGTH_SHORT).show()
                                 
                                 val toolbar: Toolbar = findViewById(R.id.toolbar)
-                                Toast.makeText(this@ChatActivity, "DEBUG: Toolbar found", Toast.LENGTH_SHORT).show()
                                 
                                 setSupportActionBar(toolbar)
                                 supportActionBar?.setDisplayShowTitleEnabled(false)
-                                Toast.makeText(this@ChatActivity, "DEBUG: Toolbar configured", Toast.LENGTH_SHORT).show()
 
                                 val toolbarTitle: TextView = findViewById(R.id.toolbarTitle)
                                 toolbarTitle.text = contactName
-                                Toast.makeText(this@ChatActivity, "DEBUG: Title set", Toast.LENGTH_SHORT).show()
 
                                 val toolbarAvatar: ImageView = findViewById(R.id.toolbarAvatar)
                                 toolbarAvatar.setImageResource(R.drawable.ic_launcher_background)
-                                Toast.makeText(this@ChatActivity, "DEBUG: Avatar set", Toast.LENGTH_SHORT).show()
 
                                 val chatRecyclerView: RecyclerView = findViewById(R.id.chatRecyclerView)
                                 messageAdapter = MessageAdapter(messages, cryptoManager, sharedSecret) { "" }
                                 chatRecyclerView.layoutManager = LinearLayoutManager(this@ChatActivity)
                                 chatRecyclerView.adapter = messageAdapter
-                                Toast.makeText(this@ChatActivity, "DEBUG: RecyclerView configured", Toast.LENGTH_SHORT).show()
                                 
                                 val messageEditText: EditText = findViewById(R.id.messageEditText)
                                 val sendButton: ImageView = findViewById(R.id.sendButton)
-                                Toast.makeText(this@ChatActivity, "DEBUG: Input controls found", Toast.LENGTH_SHORT).show()
                                 
                                 sendButton.setOnClickListener {
                                     val messageText = messageEditText.text.toString().trim()
@@ -209,9 +187,6 @@ class ChatActivity : AppCompatActivity() {
 
                         // Start periodic outbox processing
                         outboxProcessingJob = lifecycleScope.launch(Dispatchers.IO) {
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(this@ChatActivity, "DEBUG: Starting outbox processing", Toast.LENGTH_SHORT).show()
-                            }
                             while (isActive) {
                                 processOutbox()
                                 delay(10_000)
@@ -376,9 +351,6 @@ class ChatActivity : AppCompatActivity() {
                         }
 
                         loadMessages()
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(this@ChatActivity, "DEBUG: ChatActivity initialization complete", Toast.LENGTH_SHORT).show()
-                        }
                     } else {
                         withContext(Dispatchers.Main) {
                             Toast.makeText(this@ChatActivity, "ERROR: Friend not found with ID: $friendId", Toast.LENGTH_LONG).show()
