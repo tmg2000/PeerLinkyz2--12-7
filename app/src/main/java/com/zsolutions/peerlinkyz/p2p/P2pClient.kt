@@ -123,27 +123,50 @@ class P2pClient(
     }
 
     suspend fun sendMessage(message: String) {
-        try {
-            Log.d("P2pClient", "SEND_STEP_1: Starting sendMessage for: $message")
-            val currentSession = session
-            Log.d("P2pClient", "SEND_STEP_2: Current session: ${currentSession?.hashCode()}")
-            Log.d("P2pClient", "SEND_STEP_3: Session isActive: ${currentSession?.isActive}")
-            
-            if (currentSession != null && currentSession.isActive) {
-                Log.d("P2pClient", "SEND_STEP_4: About to send Frame.Text")
-                currentSession.send(Frame.Text(message))
-                Log.d("P2pClient", "SEND_STEP_5: Frame.Text sent successfully")
-                Log.d("P2pClient", "SEND_STEP_6: Checking session after send - isActive: ${currentSession.isActive}")
-                Log.d("P2pClient", "SEND_STEP_7: Message sent successfully: $message")
-            } else {
-                Log.w("P2pClient", "SEND_ERROR: Cannot send message - session null or inactive")
-                Log.w("P2pClient", "SEND_ERROR: Session null: ${currentSession == null}")
-                Log.w("P2pClient", "SEND_ERROR: Session inactive: ${currentSession?.isActive == false}")
+        var retryCount = 0
+        val maxRetries = 3
+        val retryDelayMs = 1000L
+        
+        while (retryCount <= maxRetries) {
+            try {
+                Log.d("P2pClient", "SEND_STEP_1: Starting sendMessage for: $message (attempt ${retryCount + 1})")
+                val currentSession = session
+                Log.d("P2pClient", "SEND_STEP_2: Current session: ${currentSession?.hashCode()}")
+                Log.d("P2pClient", "SEND_STEP_3: Session isActive: ${currentSession?.isActive}")
+                
+                if (currentSession != null && currentSession.isActive) {
+                    Log.d("P2pClient", "SEND_STEP_4: About to send Frame.Text")
+                    currentSession.send(Frame.Text(message))
+                    Log.d("P2pClient", "SEND_STEP_5: Frame.Text sent successfully")
+                    Log.d("P2pClient", "SEND_STEP_6: Checking session after send - isActive: ${currentSession.isActive}")
+                    Log.d("P2pClient", "SEND_STEP_7: Message sent successfully: $message")
+                    return
+                } else {
+                    Log.w("P2pClient", "SEND_ERROR: Cannot send message - session null or inactive (attempt ${retryCount + 1})")
+                    Log.w("P2pClient", "SEND_ERROR: Session null: ${currentSession == null}")
+                    Log.w("P2pClient", "SEND_ERROR: Session inactive: ${currentSession?.isActive == false}")
+                    
+                    if (retryCount < maxRetries) {
+                        Log.d("P2pClient", "SEND_RETRY: Waiting ${retryDelayMs}ms before retry...")
+                        delay(retryDelayMs)
+                        retryCount++
+                    } else {
+                        throw Exception("Session not available after $maxRetries attempts")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("P2pClient", "SEND_ERROR: Failed to send message (attempt ${retryCount + 1}): ${e.message}", e)
+                Log.e("P2pClient", "SEND_ERROR: Session after exception: ${session?.hashCode()}")
+                Log.e("P2pClient", "SEND_ERROR: Session active after exception: ${session?.isActive}")
+                
+                if (retryCount < maxRetries) {
+                    Log.d("P2pClient", "SEND_RETRY: Waiting ${retryDelayMs}ms before retry...")
+                    delay(retryDelayMs)
+                    retryCount++
+                } else {
+                    throw e
+                }
             }
-        } catch (e: Exception) {
-            Log.e("P2pClient", "SEND_ERROR: Failed to send message: ${e.message}", e)
-            Log.e("P2pClient", "SEND_ERROR: Session after exception: ${session?.hashCode()}")
-            Log.e("P2pClient", "SEND_ERROR: Session active after exception: ${session?.isActive}")
         }
     }
 
