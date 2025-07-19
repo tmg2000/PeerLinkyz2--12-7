@@ -58,258 +58,346 @@ class ChatActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_chat)
-
-        val app = application as PeerLinkyzApplication
-        p2pManager = app.p2pManager
-        cryptoManager = CryptoManager(applicationContext)
-
-        friendId = intent.getIntExtra("friendId", -1)
-        if (friendId == -1) {
-            finish()
-            return
-        }
         
-        // Restore key exchange state if available
-        restoreKeyExchangeState()
+        try {
+            Toast.makeText(this, "DEBUG: ChatActivity onCreate started", Toast.LENGTH_SHORT).show()
+            setContentView(R.layout.activity_chat)
+            Toast.makeText(this, "DEBUG: Layout set successfully", Toast.LENGTH_SHORT).show()
 
-        lifecycleScope.launch {
-            messageDao = AppDatabase.getDatabase(applicationContext).messageDao()
-            friendDao = AppDatabase.getDatabase(applicationContext).friendDao()
-            outboxRepository = com.zsolutions.peerlinkyz.db.OutboxRepository(com.zsolutions.peerlinkyz.db.AppDatabase.getDatabase(applicationContext).outboxDao())
-            val friend = friendDao.getFriendById(friendId)
-            if (friend != null) {
-                remotePeerAddress = friend.onionAddress // Assuming onionAddress is the address to connect to
+            val app = application as? PeerLinkyzApplication
+            if (app == null) {
+                Toast.makeText(this, "ERROR: Application cast failed", Toast.LENGTH_LONG).show()
+                Log.e("ChatActivity", "Application is not PeerLinkyzApplication")
+                finish()
+                return
+            }
+            Toast.makeText(this, "DEBUG: Application cast successful", Toast.LENGTH_SHORT).show()
+            
+            p2pManager = app.p2pManager
+            cryptoManager = CryptoManager(applicationContext)
+            Toast.makeText(this, "DEBUG: Managers initialized", Toast.LENGTH_SHORT).show()
 
-                val contactName = friend.username
+            friendId = intent.getIntExtra("friendId", -1)
+            if (friendId == -1) {
+                Toast.makeText(this, "ERROR: Invalid friend ID", Toast.LENGTH_LONG).show()
+                Log.e("ChatActivity", "Invalid friendId: $friendId")
+                finish()
+                return
+            }
+            Toast.makeText(this, "DEBUG: Friend ID: $friendId", Toast.LENGTH_SHORT).show()
+            
+            // Restore key exchange state if available
+            restoreKeyExchangeState()
+            Toast.makeText(this, "DEBUG: Key exchange state restored", Toast.LENGTH_SHORT).show()
 
-                val toolbar: Toolbar = findViewById(R.id.toolbar)
-                setSupportActionBar(toolbar)
-                supportActionBar?.setDisplayShowTitleEnabled(false)
-
-                val toolbarTitle: TextView = findViewById(R.id.toolbarTitle)
-                toolbarTitle.text = contactName
-
-                val toolbarAvatar: ImageView = findViewById(R.id.toolbarAvatar)
-                toolbarAvatar.setImageResource(R.drawable.ic_launcher_background) // Placeholder
-
-                val chatRecyclerView: RecyclerView = findViewById(R.id.chatRecyclerView)
-                messageAdapter = MessageAdapter(messages, cryptoManager, sharedSecret) { "" }
-                chatRecyclerView.layoutManager = LinearLayoutManager(this@ChatActivity)
-                chatRecyclerView.adapter = messageAdapter
-
-                val messageEditText: EditText = findViewById(R.id.messageEditText)
-                val sendButton: ImageView = findViewById(R.id.sendButton)
-
-                // Start periodic outbox processing
-                outboxProcessingJob = lifecycleScope.launch(Dispatchers.IO) {
-                    while (isActive) {
-                        processOutbox()
-                        delay(10_000) // Retry every 10 seconds
+            lifecycleScope.launch {
+                try {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ChatActivity, "DEBUG: Starting database init", Toast.LENGTH_SHORT).show()
                     }
-                }
+                    
+                    messageDao = AppDatabase.getDatabase(applicationContext).messageDao()
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ChatActivity, "DEBUG: MessageDao initialized", Toast.LENGTH_SHORT).show()
+                    }
+                    
+                    friendDao = AppDatabase.getDatabase(applicationContext).friendDao()
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ChatActivity, "DEBUG: FriendDao initialized", Toast.LENGTH_SHORT).show()
+                    }
+                    
+                    outboxRepository = com.zsolutions.peerlinkyz.db.OutboxRepository(com.zsolutions.peerlinkyz.db.AppDatabase.getDatabase(applicationContext).outboxDao())
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ChatActivity, "DEBUG: OutboxRepository initialized", Toast.LENGTH_SHORT).show()
+                    }
+                    
+                    val friend = friendDao.getFriendById(friendId)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ChatActivity, "DEBUG: Friend lookup completed", Toast.LENGTH_SHORT).show()
+                    }
+                    
+                    if (friend != null) {
+                        Log.d("ChatActivity", "Friend found: ${friend.username}, onionAddress: ${friend.onionAddress}")
+                        remotePeerAddress = friend.onionAddress
+                        val contactName = friend.username
 
-                // Establish persistent WebSocket connection using P2pClient
-                remotePeerAddress?.let { address ->
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        // Wait for Tor to be ready before attempting connection
-                        if (!p2pManager.isTorReady()) {
-                            Log.d("ChatActivity", "Waiting for Tor to be ready...")
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(this@ChatActivity, "Waiting for Tor to be ready...", Toast.LENGTH_SHORT).show()
-                            }
-                            // Wait and retry
-                            delay(2000)
-                            if (!p2pManager.isTorReady()) {
-                                Log.w("ChatActivity", "Tor still not ready after waiting")
-                                return@launch
+                        withContext(Dispatchers.Main) {
+                            try {
+                                Toast.makeText(this@ChatActivity, "DEBUG: Starting UI setup", Toast.LENGTH_SHORT).show()
+                                
+                                val toolbar: Toolbar = findViewById(R.id.toolbar)
+                                Toast.makeText(this@ChatActivity, "DEBUG: Toolbar found", Toast.LENGTH_SHORT).show()
+                                
+                                setSupportActionBar(toolbar)
+                                supportActionBar?.setDisplayShowTitleEnabled(false)
+                                Toast.makeText(this@ChatActivity, "DEBUG: Toolbar configured", Toast.LENGTH_SHORT).show()
+
+                                val toolbarTitle: TextView = findViewById(R.id.toolbarTitle)
+                                toolbarTitle.text = contactName
+                                Toast.makeText(this@ChatActivity, "DEBUG: Title set", Toast.LENGTH_SHORT).show()
+
+                                val toolbarAvatar: ImageView = findViewById(R.id.toolbarAvatar)
+                                toolbarAvatar.setImageResource(R.drawable.ic_launcher_background)
+                                Toast.makeText(this@ChatActivity, "DEBUG: Avatar set", Toast.LENGTH_SHORT).show()
+
+                                val chatRecyclerView: RecyclerView = findViewById(R.id.chatRecyclerView)
+                                messageAdapter = MessageAdapter(messages, cryptoManager, sharedSecret) { "" }
+                                chatRecyclerView.layoutManager = LinearLayoutManager(this@ChatActivity)
+                                chatRecyclerView.adapter = messageAdapter
+                                Toast.makeText(this@ChatActivity, "DEBUG: RecyclerView configured", Toast.LENGTH_SHORT).show()
+                                
+                                val messageEditText: EditText = findViewById(R.id.messageEditText)
+                                val sendButton: ImageView = findViewById(R.id.sendButton)
+                                Toast.makeText(this@ChatActivity, "DEBUG: Input controls found", Toast.LENGTH_SHORT).show()
+                                
+                                sendButton.setOnClickListener {
+                                    val messageText = messageEditText.text.toString().trim()
+                                    if (messageText.isNotEmpty()) {
+                                        // Commented out for testing - skip key exchange requirement
+                                        // if (!isKeyExchangeComplete || sharedSecret == null) {
+                                        //     Toast.makeText(this@ChatActivity, "Key exchange not complete. Cannot send message.", Toast.LENGTH_SHORT).show()
+                                        //     return@setOnClickListener
+                                        // }
+                                        lifecycleScope.launch(Dispatchers.IO) {
+                                            val friend = friendDao.getFriendById(friendId)
+                                            if (friend != null) {
+                                                // Commented out for testing - send plain text
+                                                // val encryptedMessage = cryptoManager.encrypt(messageText.toByteArray(StandardCharsets.UTF_8), sharedSecret!!)
+                                                val encryptedMessage = messageText.toByteArray(StandardCharsets.UTF_8)
+                                                val localPeerId = p2pManager.getPeerAddress()
+                                                if (localPeerId == null) {
+                                                    Log.e("ChatActivity", "Cannot send message: localPeerId is null (Tor may not be ready)")
+                                                    withContext(Dispatchers.Main) {
+                                                        Toast.makeText(this@ChatActivity, "Cannot send message: Tor not ready", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                    return@launch
+                                                }
+                                                val outboxMessage = com.zsolutions.peerlinkyz.db.OutboxMessage(
+                                                    senderOnionAddress = localPeerId,
+                                                    recipientOnionAddress = friend.onionAddress,
+                                                    message = encryptedMessage,
+                                                    sent = false
+                                                )
+                                                val outboxMessageId = outboxRepository.addMessage(outboxMessage)
+
+                                                val newMessage = Message(friendId = friendId, data = encryptedMessage, isSent = true)
+                                                messageDao.insertMessage(newMessage)
+
+                                                withContext(Dispatchers.Main) {
+                                                    messages.add(newMessage)
+                                                    messageAdapter.notifyItemInserted(messages.size - 1)
+                                                    chatRecyclerView.scrollToPosition(messages.size - 1)
+                                                    messageEditText.text.clear()
+                                                }
+
+                                                // Attempt to send immediately
+                                                lifecycleScope.launch {
+                                                    sendOutboxMessage(outboxMessage.copy(id = outboxMessageId))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                            } catch (e: Exception) {
+                                Toast.makeText(this@ChatActivity, "ERROR: UI setup failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                Log.e("ChatActivity", "Failed to initialize UI components: ${e.message}", e)
+                                finish()
+                                return@withContext
                             }
                         }
-                        
-                        val client = p2pClient
-                        if (client == null) {
+
+                        // Start periodic outbox processing
+                        outboxProcessingJob = lifecycleScope.launch(Dispatchers.IO) {
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(this@ChatActivity, "P2pClient not initialized. Tor may not be ready.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@ChatActivity, "DEBUG: Starting outbox processing", Toast.LENGTH_SHORT).show()
                             }
-                            return@launch
-                        }
-                        
-                        val fullAddress = if (!address.startsWith("ws://") && !address.startsWith("wss://")) {
-                            "ws://$address"
-                        } else {
-                            address
-                        }
-                        
-                        Log.d("ChatActivity", "Starting P2pClient connection to: $fullAddress")
-                        Log.d("ChatActivity", "Tor status: ${p2pManager.getTorStatus()}, Bootstrap: ${p2pManager.getTorBootstrapProgress()}%")
-                        Log.d("ChatActivity", "Local peer address: ${p2pManager.getPeerAddress()}")
-                        
-                        client.start(fullAddress)
-                        
-                        // Determine initiator and start handshake
-                        val localPeerId = p2pManager.getPeerAddress()
-                        val remotePeerId = friend.onionAddress
-                        
-                        if (localPeerId == null || localPeerId.isEmpty()) {
-                            Log.w("ChatActivity", "Local peer address not available yet (Tor may not be ready)")
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(this@ChatActivity, "Waiting for Tor to be ready...", Toast.LENGTH_SHORT).show()
+                            while (isActive) {
+                                processOutbox()
+                                delay(10_000)
                             }
-                        } else if (localPeerId < remotePeerId) {
-                            initiateHandshake()
+                        }
+
+                        // Establish persistent WebSocket connection using P2pClient
+                        remotePeerAddress?.let { address ->
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                try {
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(this@ChatActivity, "DEBUG: Starting connection to $address", Toast.LENGTH_SHORT).show()
+                                    }
+                                    
+                                    // Wait for Tor to be ready with retry logic
+                                    var torReadyAttempts = 0
+                                    while (!p2pManager.isTorReady() && torReadyAttempts < 5) {
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(this@ChatActivity, "DEBUG: Waiting for Tor (${torReadyAttempts + 1}/5)", Toast.LENGTH_SHORT).show()
+                                        }
+                                        delay(2000)
+                                        torReadyAttempts++
+                                    }
+                                    
+                                    if (!p2pManager.isTorReady()) {
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(this@ChatActivity, "ERROR: Tor timeout after 5 attempts", Toast.LENGTH_LONG).show()
+                                        }
+                                        return@launch
+                                    }
+                                    
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(this@ChatActivity, "DEBUG: Tor is ready", Toast.LENGTH_SHORT).show()
+                                    }
+                                    
+                                    val client = p2pClient
+                                    if (client == null) {
+                                        Log.e("ChatActivity", "P2pClient is null after Tor ready check")
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(this@ChatActivity, "ERROR: P2pClient not initialized", Toast.LENGTH_LONG).show()
+                                        }
+                                        return@launch
+                                    }
+                                    
+                                    val fullAddress = if (!address.startsWith("ws://") && !address.startsWith("wss://")) {
+                                        "ws://$address"
+                                    } else {
+                                        address
+                                    }
+                                    
+                                    Log.d("ChatActivity", "Starting P2pClient connection to: $fullAddress")
+                                    Log.d("ChatActivity", "Tor status: ${p2pManager.getTorStatus()}, Bootstrap: ${p2pManager.getTorBootstrapProgress()}%")
+                                    
+                                    val localPeerId = p2pManager.getPeerAddress()
+                                    Log.d("ChatActivity", "Local peer address: $localPeerId")
+                                    
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(this@ChatActivity, "DEBUG: Starting WebSocket connection", Toast.LENGTH_SHORT).show()
+                                    }
+                                    
+                                    client.start(fullAddress)
+                                    
+                                    // Determine initiator and start handshake
+                                    val remotePeerId = friend.onionAddress
+                                    
+                                    if (localPeerId == null || localPeerId.isEmpty()) {
+                                        Log.w("ChatActivity", "Local peer address not available yet (Tor may not be ready)")
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(this@ChatActivity, "DEBUG: Local peer address not ready", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } else if (localPeerId < remotePeerId) {
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(this@ChatActivity, "DEBUG: Initiating handshake", Toast.LENGTH_SHORT).show()
+                                        }
+                                        initiateHandshake()
+                                    }
+                                    
+                                    // Process any unsent messages from the outbox when connection is established
+                                    processOutbox()
+                                    
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(this@ChatActivity, "DEBUG: Connection setup complete", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("ChatActivity", "Error in connection establishment: ${e.message}", e)
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(this@ChatActivity, "ERROR: Connection error: ${e.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
                         }
                         
                         // Start observing incoming messages from P2pClient
-                        launch {
-                            client.observeMessages().consumeEach { messageText ->
-                                Log.d("ChatActivity", "Received message from P2pClient: $messageText")
-                                if (messageText.startsWith("FROM:")) {
-                                    val parts = messageText.split(" ", limit = 2)
-                                    if (parts.size == 2) {
-                                        val senderPeerId = parts[0].substringAfter("FROM:")
-                                            .replace("/ip4/", "")
-                                            .replace("/tcp/", ":")
-                                            .replace("/http", "")
-                                        val actualMessage = parts[1]
+                        lifecycleScope.launch {
+                            val client = p2pClient
+                            if (client != null) {
+                                client.observeMessages().consumeEach { messageText ->
+                                    Log.d("ChatActivity", "Received message from P2pClient: $messageText")
+                                    if (messageText.startsWith("FROM:")) {
+                                        val parts = messageText.split(" ", limit = 2)
+                                        if (parts.size == 2) {
+                                            val senderPeerId = parts[0].substringAfter("FROM:")
+                                                .replace("/ip4/", "")
+                                                .replace("/tcp/", ":")
+                                                .replace("/http", "")
+                                            val actualMessage = parts[1]
 
-                                        // Only process messages from the current friend
-                                        val senderFriend = friendDao.getFriendByOnionAddress(senderPeerId)
-                                        if (senderFriend?.id == friendId) {
-                                            // Handle key exchange message
-                                            if (actualMessage.startsWith("ECDH_PUBLIC_KEY:")) {
-                                                Log.d("ChatActivity", "Received ECDH_PUBLIC_KEY message.")
-                                                val remotePublicKeyEncoded = actualMessage.substringAfter("ECDH_PUBLIC_KEY:")
-                                                val publicKeyBytes = Base64.getDecoder().decode(remotePublicKeyEncoded)
-                                                val spec = X509EncodedKeySpec(publicKeyBytes)
-                                                val keyFactory = KeyFactory.getInstance("ECDH", "BC")
-                                                remoteECDHPublicKey = keyFactory.generatePublic(spec)
-                                                Log.d("ChatActivity", "Remote Public Key Decoded: ${remoteECDHPublicKey?.encoded?.let { Base64.getEncoder().encodeToString(it) }}")
-
-                                                // If we are not the initiator, send our public key back
-                                                val localPeerId = p2pManager.getPeerAddress()
-                                                val remotePeerId = friend.onionAddress
-                                                
-                                                if (localPeerId != null && localPeerId.isNotEmpty() && localPeerId > remotePeerId) {
-                                                    initiateHandshake() // Send our public key
-                                                } else if (localPeerId == null || localPeerId.isEmpty()) {
-                                                    Log.w("ChatActivity", "Cannot respond to key exchange: local peer address not available")
-                                                }
-
-                                                localECDHPrivateKey?.let { privateKey ->
-                                                    remoteECDHPublicKey?.let { publicKey ->
-                                                        Log.d("ChatActivity", "Deriving shared secret...")
-                                                        sharedSecret = cryptoManager.deriveSharedSecret(privateKey, publicKey)
-                                                        isKeyExchangeComplete = true
-                                                        saveKeyExchangeState()
-                                                        Log.d("ChatActivity", "Shared Secret Derived. Key exchange complete: $isKeyExchangeComplete")
-                                                        withContext(Dispatchers.Main) {
-                                                            Toast.makeText(this@ChatActivity, "Key exchange complete!", Toast.LENGTH_SHORT).show()
+                                            // Only process messages from the current friend
+                                            val senderFriend = friendDao.getFriendByOnionAddress(senderPeerId)
+                                            if (senderFriend?.id == friendId) {
+                                                // Handle key exchange message
+                                                if (actualMessage.startsWith("ECDH_PUBLIC_KEY:")) {
+                                                    val remotePublicKeyEncoded = actualMessage.substringAfter("ECDH_PUBLIC_KEY:")
+                                                    Log.d("ChatActivity", "Received remote public key: $remotePublicKeyEncoded")
+                                                    
+                                                    try {
+                                                        val remotePublicKeyBytes = Base64.getDecoder().decode(remotePublicKeyEncoded)
+                                                        val keyFactory = KeyFactory.getInstance("ECDH", "BC")
+                                                        val publicKeySpec = X509EncodedKeySpec(remotePublicKeyBytes)
+                                                        remoteECDHPublicKey = keyFactory.generatePublic(publicKeySpec)
+                                                        
+                                                        if (localECDHPrivateKey != null) {
+                                                            sharedSecret = cryptoManager.deriveSharedSecret(localECDHPrivateKey!!, remoteECDHPublicKey!!)
+                                                            isKeyExchangeComplete = true
+                                                            saveKeyExchangeState()
+                                                            Log.d("ChatActivity", "Key exchange completed successfully")
+                                                            withContext(Dispatchers.Main) {
+                                                                Toast.makeText(this@ChatActivity, "Secure connection established", Toast.LENGTH_SHORT).show()
+                                                            }
                                                         }
-                                                    } ?: Log.e("ChatActivity", "Remote public key is null after decoding.")
-                                                } ?: Log.e("ChatActivity", "Local private key is null.")
-                                            } else {
-                                                // Commented out for testing - process plain text messages
-                                                // } else if (isKeyExchangeComplete && sharedSecret != null) {
-                                                //     Log.d("ChatActivity", "Key exchange complete. Attempting to decrypt message.")
-                                                //     // Decrypt message using shared secret
-                                                //     try {
-                                                //         val decryptedMessageBytes = cryptoManager.decrypt(Base64.getDecoder().decode(actualMessage), sharedSecret!!)
-                                                //         val decryptedMessage = String(decryptedMessageBytes, StandardCharsets.UTF_8)
-                                                Log.d("ChatActivity", "Processing plain text message for testing.")
-                                                try {
-                                                    // Process as plain text for testing
-                                                    val decryptedMessage = actualMessage
-                                                    val receivedMessage = Message(friendId = friendId, data = decryptedMessage.toByteArray(StandardCharsets.UTF_8), isSent = false)
-                                                    messageDao.insertMessage(receivedMessage)
-                                                    withContext(Dispatchers.Main) {
-                                                        messages.add(receivedMessage)
-                                                        messageAdapter.notifyItemInserted(messages.size - 1)
-                                                        chatRecyclerView.scrollToPosition(messages.size - 1)
+                                                        
+                                                        // If we are not the initiator, send our public key back
+                                                        val localPeerId = p2pManager.getPeerAddress()
+                                                        val remotePeerId = friend.onionAddress
+                                                        
+                                                        if (localPeerId != null && localPeerId.isNotEmpty() && localPeerId > remotePeerId) {
+                                                            initiateHandshake() // Send our public key
+                                                        } else if (localPeerId == null || localPeerId.isEmpty()) {
+                                                            Log.w("ChatActivity", "Cannot respond to key exchange: local peer address not available")
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        Log.e("ChatActivity", "Failed to process remote public key: ${e.message}")
                                                     }
-                                                } catch (e: Exception) {
-                                                    Log.e("ChatActivity", "Message processing failed: ${e.message}")
+                                                } else {
+                                                    // Handle regular message - display plain text for testing
+                                                    val decryptedMessage = actualMessage
+                                                    
+                                                    val newMessage = Message(friendId = friendId, data = decryptedMessage.toByteArray(StandardCharsets.UTF_8), isSent = false)
+                                                    messageDao.insertMessage(newMessage)
+                                                    
                                                     withContext(Dispatchers.Main) {
-                                                        Toast.makeText(this@ChatActivity, "Failed to process message.", Toast.LENGTH_SHORT).show()
+                                                        messages.add(newMessage)
+                                                        messageAdapter.notifyItemInserted(messages.size - 1)
+                                                        findViewById<RecyclerView>(R.id.chatRecyclerView).scrollToPosition(messages.size - 1)
                                                     }
                                                 }
-                                                // } else {
-                                                //     Log.d("ChatActivity", "Key exchange not complete. Message not processed. isKeyExchangeComplete: $isKeyExchangeComplete, sharedSecret: ${sharedSecret != null}")
-                                                //     withContext(Dispatchers.Main) {
-                                                //         Toast.makeText(this@ChatActivity, "Key exchange not complete. Message not processed.", Toast.LENGTH_SHORT).show()
-                                                //     }
                                             }
-                                        } else {
-                                            Log.d("ChatActivity", "Message from unknown sender or not current friend. SenderPeerId: $senderPeerId, FriendId: $friendId")
                                         }
-                                    } else {
-                                        Log.d("ChatActivity", "Received message parts size is not 2. Message: $messageText")
                                     }
-                                } else {
-                                    Log.d("ChatActivity", "Received message does not start with 'FROM:'. Message: $messageText")
                                 }
                             }
                         }
-                        
-                        
-                        // Process any unsent messages from the outbox when connection is established
-                        processOutbox()
-                    }
-                }
 
-                sendButton.setOnClickListener {
-                    val messageText = messageEditText.text.toString().trim()
-                    if (messageText.isNotEmpty()) {
-                        // Commented out for testing - skip key exchange requirement
-                        // if (!isKeyExchangeComplete || sharedSecret == null) {
-                        //     Toast.makeText(this@ChatActivity, "Key exchange not complete. Cannot send message.", Toast.LENGTH_SHORT).show()
-                        //     return@setOnClickListener
-                        // }
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            val friend = friendDao.getFriendById(friendId)
-                            if (friend != null) {
-                                // Commented out for testing - send plain text
-                                // val encryptedMessage = cryptoManager.encrypt(messageText.toByteArray(StandardCharsets.UTF_8), sharedSecret!!)
-                                val encryptedMessage = messageText.toByteArray(StandardCharsets.UTF_8)
-                                val localPeerId = p2pManager.getPeerAddress()
-                                if (localPeerId == null) {
-                                    Log.e("ChatActivity", "Cannot send message: localPeerId is null (Tor may not be ready)")
-                                    withContext(Dispatchers.Main) {
-                                        Toast.makeText(this@ChatActivity, "Cannot send message: Tor not ready", Toast.LENGTH_SHORT).show()
-                                    }
-                                    return@launch
-                                }
-                                val outboxMessage = com.zsolutions.peerlinkyz.db.OutboxMessage(
-                                    senderOnionAddress = localPeerId,
-                                    recipientOnionAddress = friend.onionAddress,
-                                    message = encryptedMessage,
-                                    sent = false
-                                )
-                                val outboxMessageId = outboxRepository.addMessage(outboxMessage)
-
-                                val newMessage = Message(friendId = friendId, data = encryptedMessage, isSent = true)
-                                messageDao.insertMessage(newMessage)
-
-                                withContext(Dispatchers.Main) {
-                                    messages.add(newMessage)
-                                    messageAdapter.notifyItemInserted(messages.size - 1)
-                                    chatRecyclerView.scrollToPosition(messages.size - 1)
-                                    messageEditText.text.clear()
-                                }
-
-                                // Attempt to send immediately
-                                lifecycleScope.launch {
-                                    sendOutboxMessage(outboxMessage.copy(id = outboxMessageId))
-                                }
-                            }
+                        loadMessages()
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@ChatActivity, "DEBUG: ChatActivity initialization complete", Toast.LENGTH_SHORT).show()
                         }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@ChatActivity, "ERROR: Friend not found with ID: $friendId", Toast.LENGTH_LONG).show()
+                        }
+                        Log.e("ChatActivity", "Friend not found with ID: $friendId")
+                        finish()
+                    }
+                } catch (e: Exception) {
+                    Log.e("ChatActivity", "Error in onCreate lifecycle: ${e.message}", e)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ChatActivity, "ERROR: Database/lifecycle error: ${e.message}", Toast.LENGTH_LONG).show()
+                        finish()
                     }
                 }
-
-                loadMessages()
-            } else {
-                Toast.makeText(this@ChatActivity, "Friend not found", Toast.LENGTH_SHORT).show()
-                finish()
             }
+        } catch (e: Exception) {
+            Toast.makeText(this, "CRITICAL ERROR in onCreate: ${e.message}", Toast.LENGTH_LONG).show()
+            Log.e("ChatActivity", "Critical error in onCreate: ${e.message}", e)
+            finish()
         }
     }
 
@@ -402,9 +490,15 @@ class ChatActivity : AppCompatActivity() {
         if (isKeyExchangeComplete && sharedSecret != null && localECDHPrivateKey != null && remoteECDHPublicKey != null) {
             val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
             val editor = sharedPreferences.edit()
-            editor.putString("shared_secret_$friendId", Base64.getEncoder().encodeToString(sharedSecret!!))
-            editor.putString("local_private_key_$friendId", Base64.getEncoder().encodeToString(localECDHPrivateKey!!.encoded))
-            editor.putString("remote_public_key_$friendId", Base64.getEncoder().encodeToString(remoteECDHPublicKey!!.encoded))
+            sharedSecret?.let { secret ->
+                editor.putString("shared_secret_$friendId", Base64.getEncoder().encodeToString(secret))
+            }
+            localECDHPrivateKey?.let { privateKey ->
+                editor.putString("local_private_key_$friendId", Base64.getEncoder().encodeToString(privateKey.encoded))
+            }
+            remoteECDHPublicKey?.let { publicKey ->
+                editor.putString("remote_public_key_$friendId", Base64.getEncoder().encodeToString(publicKey.encoded))
+            }
             editor.putBoolean("key_exchange_complete_$friendId", true)
             editor.apply()
             Log.d("ChatActivity", "Key exchange state saved for friend $friendId")
