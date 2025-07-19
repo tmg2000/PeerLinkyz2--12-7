@@ -54,13 +54,15 @@ class MessageAdapter(
 
         fun bind(message: Message) {
             try {
-                if (sharedSecret != null) {
-                    messageTextView.text = String(cryptoManager.decrypt(message.data, sharedSecret), StandardCharsets.UTF_8)
-                } else {
-                    messageTextView.text = "[Key exchange not complete]"
-                }
+                // Commented out for testing - display plain text
+                // if (sharedSecret != null) {
+                //     messageTextView.text = String(cryptoManager.decrypt(message.data, sharedSecret), StandardCharsets.UTF_8)
+                // } else {
+                //     messageTextView.text = "[Key exchange not complete]"
+                // }
+                messageTextView.text = String(message.data, StandardCharsets.UTF_8)
             } catch (e: Exception) {
-                messageTextView.text = "[Could not decrypt message]"
+                messageTextView.text = "[Could not display message]"
             }
             timestampTextView.text = formatTimestamp(message.timestamp)
         }
@@ -71,13 +73,15 @@ class MessageAdapter(
         private val timestampTextView: TextView = itemView.findViewById(R.id.timestampTextView)
         fun bind(message: Message, username: String) {
             try {
-                if (sharedSecret != null) {
-                    messageTextView.text = String(cryptoManager.decrypt(message.data, sharedSecret), StandardCharsets.UTF_8)
-                } else {
-                    messageTextView.text = "[Key exchange not complete]"
-                }
+                // Commented out for testing - display plain text
+                // if (sharedSecret != null) {
+                //     messageTextView.text = String(cryptoManager.decrypt(message.data, sharedSecret), StandardCharsets.UTF_8)
+                // } else {
+                //     messageTextView.text = "[Key exchange not complete]"
+                // }
+                messageTextView.text = String(message.data, StandardCharsets.UTF_8)
             } catch (e: Exception) {
-                messageTextView.text = "[Could not decrypt message]"
+                messageTextView.text = "[Could not display message]"
             }
             timestampTextView.text = formatTimestamp(message.timestamp)
         }

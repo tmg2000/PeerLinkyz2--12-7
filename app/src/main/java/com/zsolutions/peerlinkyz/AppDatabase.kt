@@ -12,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
-@Database(entities = [Friend::class, Message::class, Setting::class], version = 5, exportSchema = false)
+@Database(entities = [Friend::class, Message::class, Setting::class], version = 7, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun friendDao(): FriendDao
     abstract fun messageDao(): MessageDao
@@ -97,18 +97,20 @@ abstract class AppDatabase : RoomDatabase() {
 
         private val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("ALTER TABLE `messages` RENAME TO `messages_old`")
-                database.execSQL("CREATE TABLE IF NOT EXISTS `messages` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `friendId` INTEGER NOT NULL, `data` BLOB NOT NULL, `isSent` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL)")
-                database.execSQL("INSERT INTO `messages` (id, friendId, data, isSent, timestamp) SELECT id, friendId, CAST(text AS BLOB), isSent, timestamp FROM `messages_old`")
-                database.execSQL("DROP TABLE `messages_old`")
+                database.execSQL("CREATE TABLE IF NOT EXISTS `friends_new` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `username` TEXT NOT NULL, `onionAddress` TEXT NOT NULL)")
+                
+                database.execSQL("INSERT INTO `friends_new` (id, username, onionAddress) SELECT id, username, CASE WHEN onionAddress != '' THEN onionAddress ELSE peerId END FROM `friends`")
+                
+                database.execSQL("DROP TABLE `friends`")
+                database.execSQL("ALTER TABLE `friends_new` RENAME TO `friends`")
             }
         }
 
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE `outbox` RENAME TO `outbox_old`")
-                database.execSQL("CREATE TABLE IF NOT EXISTS `outbox` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `peerId` TEXT NOT NULL, `recipientAddress` TEXT NOT NULL, `message` BLOB NOT NULL, `sent` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL)")
-                database.execSQL("INSERT INTO `outbox` (id, peerId, recipientAddress, message, sent, timestamp) SELECT id, peerId, recipientAddress, CAST(message AS BLOB), sent, timestamp FROM `outbox_old`")
+                database.execSQL("CREATE TABLE IF NOT EXISTS `outbox` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `senderOnionAddress` TEXT NOT NULL, `recipientOnionAddress` TEXT NOT NULL, `message` BLOB NOT NULL, `sent` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL)")
+                database.execSQL("INSERT INTO `outbox` (id, senderOnionAddress, recipientOnionAddress, message, sent, timestamp) SELECT id, peerId, recipientAddress, message, sent, timestamp FROM `outbox_old`")
                 database.execSQL("DROP TABLE `outbox_old`")
             }
         }

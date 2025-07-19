@@ -70,26 +70,30 @@ class CryptoManager(context: Context) {
         return keyAgreement.generateSecret()
     }
 
-    // Symmetric Encryption (AES/GCM)
+    // Symmetric Encryption (AES/GCM) - Commented out for testing
     fun encrypt(data: ByteArray, secretKey: ByteArray): ByteArray {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding", "BC")
-        val secretKeySpec = SecretKeySpec(secretKey, "AES")
-        val iv = ByteArray(12) // GCM recommended IV size is 12 bytes
-        SecureRandom().nextBytes(iv)
-        val ivParameterSpec = IvParameterSpec(iv)
-        cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, ivParameterSpec)
-        val encryptedData = cipher.doFinal(data)
-        return iv + encryptedData // Prepend IV to ciphertext
+        // Commented out for testing - return plain data
+        // val cipher = Cipher.getInstance("AES/GCM/NoPadding", "BC")
+        // val secretKeySpec = SecretKeySpec(secretKey, "AES")
+        // val iv = ByteArray(12) // GCM recommended IV size is 12 bytes
+        // SecureRandom().nextBytes(iv)
+        // val ivParameterSpec = IvParameterSpec(iv)
+        // cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, ivParameterSpec)
+        // val encryptedData = cipher.doFinal(data)
+        // return iv + encryptedData // Prepend IV to ciphertext
+        return data
     }
 
-    // Symmetric Decryption (AES/GCM)
+    // Symmetric Decryption (AES/GCM) - Commented out for testing
     fun decrypt(encryptedData: ByteArray, secretKey: ByteArray): ByteArray {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding", "BC")
-        val secretKeySpec = SecretKeySpec(secretKey, "AES")
-        val iv = encryptedData.copyOfRange(0, 12) // Extract IV from ciphertext
-        val actualEncryptedData = encryptedData.copyOfRange(12, encryptedData.size)
-        val ivParameterSpec = IvParameterSpec(iv)
-        cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivParameterSpec)
-        return cipher.doFinal(actualEncryptedData)
+        // Commented out for testing - return plain data
+        // val cipher = Cipher.getInstance("AES/GCM/NoPadding", "BC")
+        // val secretKeySpec = SecretKeySpec(secretKey, "AES")
+        // val iv = encryptedData.copyOfRange(0, 12) // Extract IV from ciphertext
+        // val actualEncryptedData = encryptedData.copyOfRange(12, encryptedData.size)
+        // val ivParameterSpec = IvParameterSpec(iv)
+        // cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivParameterSpec)
+        // return cipher.doFinal(actualEncryptedData)
+        return encryptedData
     }
 }
