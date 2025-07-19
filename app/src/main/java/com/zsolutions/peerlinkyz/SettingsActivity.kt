@@ -208,15 +208,12 @@ class SettingsActivity : AppCompatActivity() {
             lifecycleScope.launch(Dispatchers.IO) {
                 val existing = settingDao.get("my_qr_code_content")
                 val content = existing ?: run {
-                    val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext())
-                    val userId = sharedPreferences.getString("user_id", "")
                     val app = requireActivity().application as PeerLinkyzApplication
-                    val peerId = app.p2pManager.getPeerAddress()
+                    val onionAddress = app.p2pManager.getPeerAddress()
 
                     JSONObject().apply {
                         put("username", username)
-                        put("userId", userId)
-                        put("peerId", peerId)
+                        put("onionAddress", onionAddress)
                     }.toString().also {
                         settingDao.insert(Setting("my_qr_code_content", it))
                     }

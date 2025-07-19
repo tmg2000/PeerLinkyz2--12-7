@@ -79,7 +79,7 @@ class ChatActivity : AppCompatActivity() {
             outboxRepository = com.zsolutions.peerlinkyz.db.OutboxRepository(com.zsolutions.peerlinkyz.db.AppDatabase.getDatabase(applicationContext).outboxDao())
             val friend = friendDao.getFriendById(friendId)
             if (friend != null) {
-                remotePeerAddress = friend.peerId // Assuming peerId is the address to connect to
+                remotePeerAddress = friend.onionAddress // Assuming onionAddress is the address to connect to
 
                 val contactName = friend.username
 
@@ -148,7 +148,7 @@ class ChatActivity : AppCompatActivity() {
                         
                         // Determine initiator and start handshake
                         val localPeerId = p2pManager.getPeerAddress()
-                        val remotePeerId = friend.peerId
+                        val remotePeerId = friend.onionAddress
                         
                         if (localPeerId == null || localPeerId.isEmpty()) {
                             Log.w("ChatActivity", "Local peer address not available yet (Tor may not be ready)")
@@ -173,7 +173,7 @@ class ChatActivity : AppCompatActivity() {
                                         val actualMessage = parts[1]
 
                                         // Only process messages from the current friend
-                                        val senderFriend = friendDao.getFriendByPeerId(senderPeerId)
+                                        val senderFriend = friendDao.getFriendByOnionAddress(senderPeerId)
                                         if (senderFriend?.id == friendId) {
                                             // Handle key exchange message
                                             if (actualMessage.startsWith("ECDH_PUBLIC_KEY:")) {
@@ -187,7 +187,7 @@ class ChatActivity : AppCompatActivity() {
 
                                                 // If we are not the initiator, send our public key back
                                                 val localPeerId = p2pManager.getPeerAddress()
-                                                val remotePeerId = friend.peerId
+                                                val remotePeerId = friend.onionAddress
                                                 
                                                 if (localPeerId != null && localPeerId.isNotEmpty() && localPeerId > remotePeerId) {
                                                     initiateHandshake() // Send our public key
@@ -270,8 +270,8 @@ class ChatActivity : AppCompatActivity() {
                                     return@launch
                                 }
                                 val outboxMessage = com.zsolutions.peerlinkyz.db.OutboxMessage(
-                                    peerId = localPeerId,
-                                    recipientAddress = friend.peerId,
+                                    senderOnionAddress = localPeerId,
+                                    recipientOnionAddress = friend.onionAddress,
                                     message = encryptedMessage,
                                     sent = false
                                 )
@@ -362,7 +362,7 @@ class ChatActivity : AppCompatActivity() {
 
                 if (client.isConnected()) {
                     val messageString = String(outboxMessage.message, Charsets.ISO_8859_1)
-                    client.sendMessage("FROM:${outboxMessage.peerId} $messageString")
+                    client.sendMessage("FROM:${outboxMessage.senderOnionAddress} $messageString")
                     outboxRepository.markAsSent(outboxMessage.id)
                     Log.d("ChatActivity", "Message sent successfully: ${outboxMessage.id}")
                 } else {

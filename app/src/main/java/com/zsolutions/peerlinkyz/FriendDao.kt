@@ -12,8 +12,8 @@ interface FriendDao {
     @Query("SELECT * FROM friends WHERE id = :friendId")
     suspend fun getFriendById(friendId: Int): Friend?
 
-    @Query("SELECT * FROM friends WHERE peerId = :peerId")
-    suspend fun getFriendByPeerId(peerId: String): Friend?
+    @Query("SELECT * FROM friends WHERE onionAddress = :onionAddress")
+    suspend fun getFriendByOnionAddress(onionAddress: String): Friend?
 
     @Insert
     suspend fun insertFriend(friend: Friend): Long

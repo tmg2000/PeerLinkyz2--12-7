@@ -6,8 +6,8 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "outbox")
 data class OutboxMessage(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val peerId: String,
-    val recipientAddress: String,
+    val senderOnionAddress: String,
+    val recipientOnionAddress: String,
     val message: ByteArray,
     val sent: Boolean = false,
     val timestamp: Long = System.currentTimeMillis()

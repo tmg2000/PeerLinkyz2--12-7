@@ -68,11 +68,6 @@ class PeerLinkyzApplication : MultiDexApplication() {
                 else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
             }
         )
-        // Generate and store a unique user ID if it doesn't exist
-        if (!sharedPreferences.contains("user_id")) {
-            val userId = UUID.randomUUID().toString()
-            sharedPreferences.edit().putString("user_id", userId).apply()
-        }
     }
 
     override fun onTerminate() {
