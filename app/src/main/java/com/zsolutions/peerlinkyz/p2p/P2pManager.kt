@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.isActive
 import io.ktor.websocket.DefaultWebSocketSession
 import java.util.concurrent.TimeUnit
 import android.content.Intent
@@ -39,12 +40,18 @@ class P2pManager(private val context: Context, private val scope: CoroutineScope
     private val messageChannel = Channel<String>(Channel.UNLIMITED)
 
     private val workingTorService = WorkingTorService(context, scope)
-    private var p2pClient: P2pClient? = null
+    var p2pClient: P2pClient? = null
+        private set
     private val _onionAddress = MutableStateFlow<String?>(null)
     val onionAddress: SharedFlow<String?> = _onionAddress.asSharedFlow()
 
     private val _torStatus = MutableStateFlow("Stopped")
     val torStatusFlow: StateFlow<String> = _torStatus
+    
+    private val _connectionStatus = MutableStateFlow("Disconnected")
+    val connectionStatus: StateFlow<String> = _connectionStatus
+    
+    private var connectionMonitorJob: kotlinx.coroutines.Job? = null
 
     init {
         // Observe working Tor service onion address changes
@@ -60,8 +67,8 @@ class P2pManager(private val context: Context, private val scope: CoroutineScope
             workingTorService.status.collect { status ->
                 Log.d("P2pManager", "Tor status: $status")
                 _torStatus.value = status
-                if (status == "Tor Ready" && p2pClient == null) {
-                    initializeP2pClient()
+                if (status == "Tor Ready") {
+                    ensureP2pClientReady()
                 }
             }
         }
@@ -123,6 +130,21 @@ class P2pManager(private val context: Context, private val scope: CoroutineScope
 
     fun stop() {
         try {
+            connectionMonitorJob?.cancel()
+            Log.d("P2pManager", "Connection monitoring stopped")
+        } catch (e: Exception) {
+            Log.e("P2pManager", "Error stopping connection monitoring: ${e.message}")
+        }
+        
+        try {
+            p2pClient?.disconnect()
+            p2pClient = null
+            Log.d("P2pManager", "P2pClient disconnected and nullified")
+        } catch (e: Exception) {
+            Log.e("P2pManager", "Error stopping P2pClient: ${e.message}")
+        }
+        
+        try {
             server?.stop(1000L, 5000L, TimeUnit.MILLISECONDS)
             Log.d("P2pManager", "WebSocket server stopped")
         } catch (e: Exception) {
@@ -178,17 +200,75 @@ class P2pManager(private val context: Context, private val scope: CoroutineScope
         return workingTorService.status.value == "Tor Ready"
     }
     
-    fun getP2pClient(): P2pClient? = p2pClient
+    
+    fun ensureP2pClientReady() {
+        if (p2pClient == null || !isTorReady()) {
+            initializeP2pClient()
+        }
+        startConnectionMonitoring()
+    }
     
     private fun initializeP2pClient() {
-        val torProxy = workingTorService.getSocksProxy()
-        val httpClient = HttpClient(OkHttp) {
-            engine {
-                proxy = torProxy
+        try {
+            // Clean up existing client if any
+            p2pClient?.disconnect()
+            
+            val torProxy = workingTorService.getSocksProxy()
+            val httpClient = HttpClient(OkHttp) {
+                engine {
+                    proxy = torProxy
+                }
+                install(ClientWebSockets)
             }
-            install(ClientWebSockets)
+            p2pClient = P2pClient(scope, httpClient)
+            _connectionStatus.value = "Initialized"
+            Log.d("P2pManager", "P2pClient initialized with Tor proxy")
+        } catch (e: Exception) {
+            Log.e("P2pManager", "Failed to initialize P2pClient: ${e.message}")
+            _connectionStatus.value = "Failed"
         }
-        p2pClient = P2pClient(scope, httpClient)
-        Log.d("P2pManager", "P2pClient initialized with Tor proxy")
+    }
+    
+    private fun startConnectionMonitoring() {
+        connectionMonitorJob?.cancel()
+        connectionMonitorJob = scope.launch {
+            while (isActive) {
+                try {
+                    val client = p2pClient
+                    if (client == null) {
+                        _connectionStatus.value = "No Client"
+                        if (isTorReady()) {
+                            Log.d("P2pManager", "P2pClient is null but Tor is ready, reinitializing...")
+                            initializeP2pClient()
+                        }
+                    } else if (!client.isConnected()) {
+                        _connectionStatus.value = "Disconnected"
+                        Log.d("P2pManager", "P2pClient disconnected, checking if reinitialization needed...")
+                        
+                        // If Tor is ready but client is disconnected, create new instance
+                        if (isTorReady()) {
+                            Log.d("P2pManager", "Tor is ready, creating new P2pClient instance...")
+                            initializeP2pClient()
+                        }
+                    } else {
+                        _connectionStatus.value = "Connected"
+                    }
+                    
+                    kotlinx.coroutines.delay(5000) // Check every 5 seconds
+                } catch (e: Exception) {
+                    Log.e("P2pManager", "Error in connection monitoring: ${e.message}")
+                    kotlinx.coroutines.delay(10000) // Wait longer on error
+                }
+            }
+        }
+    }
+    
+    fun forceReconnect() {
+        Log.d("P2pManager", "Force reconnect requested")
+        if (isTorReady()) {
+            initializeP2pClient()
+        } else {
+            Log.w("P2pManager", "Cannot force reconnect - Tor not ready")
+        }
     }
 }

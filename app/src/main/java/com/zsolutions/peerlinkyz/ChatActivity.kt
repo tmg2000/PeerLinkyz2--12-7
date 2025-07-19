@@ -52,7 +52,7 @@ class ChatActivity : AppCompatActivity() {
     private var outboxProcessingJob: Job? = null
 
     private lateinit var p2pManager: P2pManager
-    private val p2pClient: P2pClient? get() = p2pManager.getP2pClient()
+    private val p2pClient: P2pClient? get() = p2pManager.p2pClient
     private lateinit var cryptoManager: CryptoManager
     private lateinit var outboxRepository: com.zsolutions.peerlinkyz.db.OutboxRepository
 
