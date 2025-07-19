@@ -43,22 +43,33 @@ class P2pClient(
                         Log.d("P2pClient", "Successfully connected to $address")
                         
                         try {
+                            Log.d("P2pClient", "Starting incoming message loop for session: ${this.hashCode()}")
                             for (frame in incoming) {
+                                Log.d("P2pClient", "Processing frame: ${frame.javaClass.simpleName}")
                                 if (frame is Frame.Text) {
                                     val text = frame.readText()
                                     Log.d("P2pClient", "Received message: $text")
                                     messageChannel.send(text)
+                                } else if (frame is Frame.Close) {
+                                    Log.d("P2pClient", "Received close frame: ${frame.readReason()}")
+                                    break
+                                } else if (frame is Frame.Ping) {
+                                    Log.d("P2pClient", "Received ping frame")
+                                } else if (frame is Frame.Pong) {
+                                    Log.d("P2pClient", "Received pong frame")
                                 }
                             }
+                            Log.d("P2pClient", "Incoming message loop ended for session: ${this.hashCode()}")
                         } catch (e: Exception) {
-                            Log.e("P2pClient", "Error receiving message: ${e.message}")
+                            Log.e("P2pClient", "Error in message loop: ${e.message}", e)
                         } finally {
+                            Log.d("P2pClient", "Finally block executed for session: ${this.hashCode()}, shouldReconnect: $shouldReconnect")
                             // Only set session to null if we should not reconnect
                             if (!shouldReconnect) {
                                 session = null
                                 Log.d("P2pClient", "WebSocket session closed - reconnection disabled")
                             } else {
-                                Log.d("P2pClient", "WebSocket session ended but will reconnect")
+                                Log.d("P2pClient", "WebSocket session ended but will reconnect, preserving session reference")
                             }
                         }
                     }
